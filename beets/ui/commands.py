@@ -273,19 +273,7 @@ def show_change(cur_artist, cur_album, match):
     if match.info.data_url:
         print_(u'URL:\n    %s' % match.info.data_url)
 
-    # Info line.
-    info = []
-    # Similarity.
-    info.append(u'(Similarity: %s)' % dist_string(match.distance))
-    # Penalties.
-    penalties = penalty_string(match.distance)
-    if penalties:
-        info.append(penalties)
-    # Disambiguation.
-    disambig = disambig_string(match.info)
-    if disambig:
-        info.append(ui.colorize('text_highlight_minor', u'(%s)' % disambig))
-    print_(' '.join(info))
+    infoHelper(match)
 
     # Tracks.
     pairs = list(match.mapping.items())
@@ -399,6 +387,22 @@ def show_change(cur_artist, cur_album, match):
         print_(ui.colorize('text_warning', line))
 
 
+def infoHelper(match):#taken out because of duplicate code
+    # Info line.
+    info = []
+    # Similarity.
+    info.append(u'(Similarity: %s)' % dist_string(match.distance))
+    # Penalties.
+    penalties = penalty_string(match.distance)
+    if penalties:
+        info.append(penalties)
+    # Disambiguation.
+    disambig = disambig_string(match.info)
+    if disambig:
+        info.append(ui.colorize('text_highlight_minor', u'(%s)' % disambig))
+    print_(' '.join(info))
+
+
 def show_item_change(item, match):
     """Print out the change that would occur by tagging `item` with the
     metadata from `match`, a TrackMatch object.
@@ -422,19 +426,7 @@ def show_item_change(item, match):
     if match.info.data_url:
         print_(u'URL:\n    %s' % match.info.data_url)
 
-    # Info line.
-    info = []
-    # Similarity.
-    info.append(u'(Similarity: %s)' % dist_string(match.distance))
-    # Penalties.
-    penalties = penalty_string(match.distance)
-    if penalties:
-        info.append(penalties)
-    # Disambiguation.
-    disambig = disambig_string(match.info)
-    if disambig:
-        info.append(ui.colorize('text_highlight_minor', u'(%s)' % disambig))
-    print_(' '.join(info))
+    infoHelper(match)
 
 
 def summarize_items(items, singleton):

@@ -28,9 +28,9 @@ MBID_REGEX = r"(\d|\w){8}-(\d|\w){4}-(\d|\w){4}-(\d|\w){4}-(\d|\w){12}"
 
 
 class MBSyncPlugin(BeetsPlugin):
-    
-    def __init__(self, lib=None, move=None, 
-    pretend=None, write=None, query=None):
+
+    def __init__(self, lib=None, move=None,
+                 pretend=None, write=None, query=None):
         super(MBSyncPlugin, self).__init__()
         self.lib = lib
         self.move = move
@@ -65,8 +65,8 @@ class MBSyncPlugin(BeetsPlugin):
             lib=lib,
             move=ui.should_move(opts.move),
             pretend=opts.pretend,
-            write=ui.should_write(opts.write), 
-            query= ui.decargs(args)
+            write=ui.should_write(opts.write),
+            query=ui.decargs(args)
         )
         self.singletons()
         self.albums()
@@ -99,7 +99,47 @@ class MBSyncPlugin(BeetsPlugin):
             # Apply.
             with self.lib.transaction():
                 autotag.apply_item_metadata(item, track_info)
-                apply_item_changes(self.lib, item, self.move, self.pretend, self.write)
+                apply_item_changes(self.lib, item,
+                                   self.move, self.pretend, self.write)
+
+    def albums(self):
+        """Retrieve and apply info from the autotagger for albums matched by
+        query and their items.
+        """
+        # Process matching albums.
+        for albm in self.lib.albums(self.query):
+            album_formatted = format(albm)
+            album_info = self.validate_album(albm.mb_albumid, album_formatted)
+            if album_info is None:
+                continue
+
+            items = list(albm.items())
+
+            # Map release track and recording MBIDs to their information.
+            # Recordings can appear multiple times on a release, so each MBID
+            # maps to a list of TrackInfo objects.
+            releasetrack_index = dict()
+            track_index = defaultdict(list)
+            for track_info in album_info.tracks:
+                releasetrack_index[track_info.release_track_id] = track_info
+                track_index[track_info.track_id].append(track_info)
+
+            mapping = self.construct_track_mapping(
+                items, releasetrack_index, track_index
+                )
+
+            # Apply.
+            self._log.debug(u'applying changes to {}', album_formatted)
+            with self.lib.transaction():
+                autotag.apply_metadata(album_info, mapping)
+                any_changed_item = self.find_changed_items(items)
+                if any_changed_item is None:
+                    # No change to any item.
+                    continue
+
+                if not self.pretend:
+                    self.update_album_structure(albm, any_changed_item)
+                    self.move_album_art(albm, items, album_formatted)
 
     def construct_track_mapping(self, items, releasetrack_index, track_index):
         # Construct a track mapping according to MBIDs (release track MBIDs
@@ -124,41 +164,26 @@ class MBSyncPlugin(BeetsPlugin):
                             break
         return mapping
 
-    def apply_track_mapping(self, items, mapping, album_info, album_formatted):
-        pass
-
-    def validate_album(self, albm, album_formatted):
-        if not albm.mb_albumid:
+    def validate_album(self, albumid, album_formatted):
+        if not albumid:
             self._log.info(u'Skipping album with no mb_albumid: {0}',
-                            album_formatted)
+                           album_formatted)
             return None
 
         # Do we have a valid MusicBrainz album ID?
-        if not re.match(MBID_REGEX, albm.mb_albumid):
+        if not re.match(MBID_REGEX, albumid):
             self._log.info(u'Skipping album with invalid mb_albumid: {0}',
-                            album_formatted)
+                           album_formatted)
             return None
 
         # Get the MusicBrainz album information.
-        album_info = hooks.album_for_mbid(albm.mb_albumid)
+        album_info = hooks.album_for_mbid(albumid)
         if not album_info:
             self._log.info(u'Release ID {0} not found for album {1}',
-                            albm.mb_albumid,
-                            album_formatted)
+                           albumid, album_formatted)
             return None
-        
+
         return album_info
-    
-    def get_track_details(self, album_info):
-        # Map release track and recording MBIDs to their information.
-        # Recordings can appear multiple times on a release, so each MBID
-        # maps to a list of TrackInfo objects.
-        releasetrack_index = dict()
-        track_index = defaultdict(list)
-        for track_info in album_info.tracks:
-            releasetrack_index[track_info.release_track_id] = track_info
-            track_index[track_info.track_id].append(track_info)
-        return releasetrack_index, track_index
 
     def find_changed_items(self, items):
         any_changed_item = items[0]
@@ -169,7 +194,8 @@ class MBSyncPlugin(BeetsPlugin):
             changed |= item_changed
             if item_changed:
                 any_changed_item = item
-                apply_item_changes(self.lib, item, self.move, self.pretend, self.write)
+                apply_item_changes(self.lib, item, self.move,
+                                   self.pretend, self.write)
         if not changed:
             # No change to any item.
             return None
@@ -186,33 +212,3 @@ class MBSyncPlugin(BeetsPlugin):
         if self.move and self.lib.directory in util.ancestry(items[0].path):
             self._log.debug(u'moving album {0}', album_formatted)
             albm.move()
-
-    def albums(self):
-        """Retrieve and apply info from the autotagger for albums matched by
-        query and their items.
-        """
-        # Process matching albums.
-        for albm in self.lib.albums(self.query):
-            album_formatted = format(albm)
-            album_info = self.validate_album(albm, album_formatted)
-            if album_info is None:
-                continue
-            
-            items = list(albm.items())
-
-            releasetrack_index, track_index = self.get_track_details(album_info)
-
-            mapping = self.construct_track_mapping(items, releasetrack_index, track_index)
-
-            # Apply.
-            self._log.debug(u'applying changes to {}', album_formatted)
-            with self.lib.transaction():
-                autotag.apply_metadata(album_info, mapping)
-                any_changed_item = self.find_changed_items(self.lib, items)
-                if any_changed_item is None :
-                    # No change to any item.
-                    continue
-
-                if not self.pretend:
-                    self.update_album_structure(self.lib, albm, any_changed_item)
-                    self.move_album_art(self.lib, albm, items, album_formatted)

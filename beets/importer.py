@@ -1605,6 +1605,9 @@ def albums_in_dir(path):
     of (paths, items) where paths is a list of directories and items is
     a list of Items that is probably an album. Specifically, any folder
     containing any media files is an album.
+
+    :param path: root directory to scan
+    :return: iterator of tuples containing collapse paths and items
     """
     collapse_pat = collapse_paths = collapse_items = None
     ignore = config['ignore'].as_str_seq()
@@ -1633,63 +1636,12 @@ def albums_in_dir(path):
                     yield collapse_paths, collapse_items
                 collapse_pat = collapse_paths = collapse_items = None
 
-        # Check whether this directory looks like the *first* directory
-        # in a multi-disc sequence. There are two indicators: the file
-        # is named like part of a multi-disc sequence (e.g., "Title Disc
-        # 1") or it contains no items but only directories that are
-        # named in this way.
-        start_collapsing = False
-        for marker in MULTIDISC_MARKERS:
-            # We're using replace on %s due to lack of .format() on bytestrings
-            p = MULTIDISC_PAT_FMT.replace(b'%s', marker)
-            marker_pat = re.compile(p, re.I)
-            match = marker_pat.match(os.path.basename(root))
-
-            # Is this directory the root of a nested multi-disc album?
-            if dirs and not items:
-                # Check whether all subdirectories have the same prefix.
-                start_collapsing = True
-                subdir_pat = None
-                for subdir in dirs:
-                    subdir = util.bytestring_path(subdir)
-                    # The first directory dictates the pattern for
-                    # the remaining directories.
-                    if not subdir_pat:
-                        match = marker_pat.match(subdir)
-                        if match:
-                            match_group = re.escape(match.group(1))
-                            subdir_pat = re.compile(
-                                b''.join([b'^', match_group, br'\d']),
-                                re.I
-                            )
-                        else:
-                            start_collapsing = False
-                            break
-
-                    # Subsequent directories must match the pattern.
-                    elif not subdir_pat.match(subdir):
-                        start_collapsing = False
-                        break
-
-                # If all subdirectories match, don't check other
-                # markers.
-                if start_collapsing:
-                    break
-
-            # Is this directory the first in a flattened multi-disc album?
-            elif match:
-                start_collapsing = True
-                # Set the current pattern to match directories with the same
-                # prefix as this one, followed by a digit.
-                collapse_pat = re.compile(
-                    b''.join([b'^', re.escape(match.group(1)), br'\d']),
-                    re.I
-                )
-                break
-
         # If either of the above heuristics indicated that this is the
         # beginning of a multi-disc album, initialize the collapsed
         # directory and item lists and check the next directory.
+        updated_pat, start_collapsing = check_multi_disc(
+            collapse_pat, root, dirs, items)
+        collapse_pat = updated_pat
         if start_collapsing:
             # Start collapsing; continue to the next iteration.
             collapse_paths = [root]
@@ -1703,3 +1655,66 @@ def albums_in_dir(path):
     # Clear out any unfinished collapse.
     if collapse_paths and collapse_items:
         yield collapse_paths, collapse_items
+
+
+def check_multi_disc(collapse_pat, root, dirs, items):
+    """Check whether a directory looks like the *first* directory
+    in a multi-disc sequence. There are two indicators: the file
+    is named like part of a multi-disc sequence (e.g., "Title Disc
+    1") or it contains no items but only directories that are
+    named in this way.
+
+    :param: collapse_pat: initial collapse pattern
+    :params root: root directory
+    :param dirs: directories to process
+    :param items: files to process
+    :return: updated collapse pattern and collapse start flag
+    """
+    start_collapsing = False
+    for marker in MULTIDISC_MARKERS:
+        # We're using replace on %s due to lack of .format() on bytestrings
+        p = MULTIDISC_PAT_FMT.replace(b'%s', marker)
+        marker_pat = re.compile(p, re.I)
+        match = marker_pat.match(os.path.basename(root))
+
+        # Is this directory the root of a nested multi-disc album?
+        if dirs and not items:
+            # Check whether all subdirectories have the same prefix.
+            start_collapsing = True
+            subdir_pat = None
+            for subdir in dirs:
+                subdir = util.bytestring_path(subdir)
+                # The first directory dictates the pattern for
+                # the remaining directories.
+                if not subdir_pat:
+                    match = marker_pat.match(subdir)
+                    if match:
+                        match_group = re.escape(match.group(1))
+                        subdir_pat = re.compile(
+                            b''.join([b'^', match_group, br'\d']),
+                            re.I
+                        )
+                    else:
+                        start_collapsing = False
+                        break
+
+                # Subsequent directories must match the pattern.
+                elif not subdir_pat.match(subdir):
+                    start_collapsing = False
+                    break
+
+            # If all subdirectories match, don't check other
+            # markers.
+            if start_collapsing:
+                break
+
+        # Is this directory the first in a flattened multi-disc album?
+        elif match:
+            start_collapsing = True
+            # Set the current pattern to match directories with the same
+            # prefix as this one, followed by a digit.
+            collapse_pat = re.compile(
+                b''.join([b'^', re.escape(match.group(1)), br'\d']),
+                re.I)
+            break
+    return (collapse_pat, start_collapsing)

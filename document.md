@@ -1,8 +1,8 @@
 # Change Log
 
-All notable changes to this project will be documented in this file.
+All notable changes to this project in this branch will be documented in this file.
 
-## 2019-10-28
+## 2019-11-24
 
 ### Added
 - added documentation

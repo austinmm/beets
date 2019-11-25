@@ -5,7 +5,9 @@ All notable changes to this project in this branch will be documented in this fi
 ## 2019-11-23
 
 ### Added
--documentation file
+- documentation file
+- extracted method normalizingStr from 
+- extracted method strEndWith
 
 ### Changed
 - [hooks.py](https://github.com/austinmm/beets/blob/Chris_Nguyen_deliverible2task1/beets/autotag/hooks.py)

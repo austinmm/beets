@@ -6,6 +6,9 @@ All notable changes to this project in this branch will be documented in this fi
 
 ### Added
 - documentation file
+- extracted method isLetterCaptilized
+- extracted method makePrompt
+- extracted method fallBackPrompt
 
 ### Changed
 - [__init___.py](https://github.com/austinmm/beets/blob/Chris_Nguyen_deliverible2task2/beets/ui/__init__.py)
